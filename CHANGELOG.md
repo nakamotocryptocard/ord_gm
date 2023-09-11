@@ -1,6 +1,18 @@
 Changelog
 =========
 
+[0.9.0-gms1](https://github.com/ordinals/ord/releases/tag/0.9.0-gms1) - 2023-09-11
+----------------------------------------------------------------------------------
+
+### Added
+
+- Add `/inscriptions_json/` endpoint
+- Add `/transfers/` endpoint
+- Add `/stats/` endpoint
+- Only index blocks when new blocks exist and the height limit isn't reached
+- Add `--no-progress-bar` flag to inhibit the display of the progress bar
+- Add server request logging
+
 [0.9.0](https://github.com/ordinals/ord/releases/tag/0.9.0) - 2023-09-11
 ------------------------------------------------------------------------
 
