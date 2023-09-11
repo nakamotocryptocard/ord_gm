@@ -241,6 +241,7 @@ impl Server {
         .route("/search/:query", get(Self::search_by_path))
         .route("/static/*path", get(Self::static_asset))
         .route("/status", get(Self::status))
+        .route("/transfers/:height", get(Self::inscriptionids_from_height))
         .route("/tx/:txid", get(Self::transaction))
         .layer(Extension(index))
         .layer(Extension(page_config))
@@ -638,6 +639,40 @@ impl Server {
       )
       .page(page_config, index.has_sat_index()?),
     )
+  }
+
+  async fn inscriptionids_from_height(
+    Extension(page_config): Extension<Arc<PageConfig>>,
+    Extension(index): Extension<Arc<Index>>,
+    Path(height): Path<u64>,
+  ) -> ServerResult<String> {
+    log::info!("GET /transfers/{height}");
+    let mut ret = String::from("");
+    for inscription_id in index.get_inscription_ids_by_height(height)? {
+      let satpoint = index
+        .get_inscription_satpoint_by_id(inscription_id)?
+        .ok_or_not_found(|| format!("inscription {inscription_id}"))?;
+      let address = if satpoint.outpoint == unbound_outpoint() {
+        String::from("unbound")
+      } else {
+        let output = index
+          .get_transaction(satpoint.outpoint.txid)?
+          .ok_or_not_found(|| format!("inscription {inscription_id} current transaction"))?
+          .output
+          .into_iter()
+          .nth(satpoint.outpoint.vout.try_into().unwrap())
+          .ok_or_not_found(|| format!("inscription {inscription_id} current transaction output"))?;
+        if let Ok(address) = page_config.chain.address_from_script(&output.script_pubkey) {
+          address.to_string()
+        } else {
+          String::from("error")
+        }
+      };
+
+      ret += &format!("{} {}\n", inscription_id, address);
+    }
+
+    Ok(ret)
   }
 
   async fn transaction(

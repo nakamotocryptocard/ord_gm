@@ -46,6 +46,7 @@ macro_rules! define_multimap_table {
 define_multimap_table! { INSCRIPTION_ID_TO_CHILDREN, &InscriptionIdValue, &InscriptionIdValue }
 define_multimap_table! { SATPOINT_TO_INSCRIPTION_ID, &SatPointValue, &InscriptionIdValue }
 define_multimap_table! { SAT_TO_INSCRIPTION_ID, u64, &InscriptionIdValue }
+define_multimap_table! { HEIGHT_TO_INSCRIPTION_ID, u64, &InscriptionIdValue }
 define_table! { HEIGHT_TO_BLOCK_HASH, u64, &BlockHashValue }
 define_table! { HEIGHT_TO_LAST_INSCRIPTION_NUMBER, u64, (i64, i64) }
 define_table! { INSCRIPTION_ID_TO_INSCRIPTION_ENTRY, &InscriptionIdValue, InscriptionEntryValue }
@@ -236,6 +237,7 @@ impl Index {
         tx.open_multimap_table(INSCRIPTION_ID_TO_CHILDREN)?;
         tx.open_multimap_table(SATPOINT_TO_INSCRIPTION_ID)?;
         tx.open_multimap_table(SAT_TO_INSCRIPTION_ID)?;
+        tx.open_multimap_table(HEIGHT_TO_INSCRIPTION_ID)?;
         tx.open_table(HEIGHT_TO_BLOCK_HASH)?;
         tx.open_table(HEIGHT_TO_LAST_INSCRIPTION_NUMBER)?;
         tx.open_table(INSCRIPTION_ID_TO_INSCRIPTION_ENTRY)?;
@@ -648,6 +650,23 @@ impl Index {
       .collect()
   }
 
+  pub(crate) fn get_inscription_ids_by_height(&self, height: u64) -> Result<Vec<InscriptionId>> {
+    let mut ret = Vec::new();
+    for range in self
+      .database
+      .begin_read()?
+      .open_multimap_table(HEIGHT_TO_INSCRIPTION_ID)?
+      .range::<&u64>(&height..&(height + 1))?
+    {
+      let (_, ids) = range?;
+      for id in ids {
+        ret.push(Entry::load(*id?.value()));
+      }
+    }
+
+    Ok(ret)
+  }
+
   pub(crate) fn get_inscription_ids_by_sat(&self, sat: Sat) -> Result<Vec<InscriptionId>> {
     let rtx = &self.database.begin_read()?;
 
@@ -1036,6 +1055,53 @@ impl Index {
         .get(&inscription_id.store())?
         .map(|value| InscriptionEntry::load(value.value())),
     )
+  }
+
+  pub(crate) fn delete_transfer_log(&self) -> Result {
+    let wtx = self.database.begin_write().unwrap();
+    wtx.delete_multimap_table(HEIGHT_TO_INSCRIPTION_ID)?;
+    Ok(wtx.commit()?)
+  }
+
+  pub(crate) fn trim_transfer_log(&self, height: u64) -> Result {
+    let wtx = self.begin_write()?;
+    for pair in self
+      .database
+      .begin_read()?
+      .open_multimap_table(HEIGHT_TO_INSCRIPTION_ID)?
+      .range(..height)?
+    {
+      wtx
+        .open_multimap_table(HEIGHT_TO_INSCRIPTION_ID)?
+        .remove_all(pair?.0.value())?;
+    }
+    Ok(wtx.commit()?)
+  }
+
+  pub(crate) fn show_transfer_log_stats(&self) -> Result<(u64, Option<u64>, Option<u64>)> {
+    let rtx = self.database.begin_read().unwrap();
+    let table = rtx.open_multimap_table(HEIGHT_TO_INSCRIPTION_ID)?;
+    let mut iter = table.iter()?;
+
+    let rows = table.len()?;
+
+    let first = iter
+      .next()
+      .and_then(|result| result.ok())
+      .map(|(height, _id)| height.value());
+
+    let last = iter
+      .next_back()
+      .and_then(|result| result.ok())
+      .map(|(height, _id)| height.value());
+
+    if first.is_none() {
+      Ok((rows, None, None))
+    } else if last.is_none() {
+      Ok((rows, first, first))
+    } else {
+      Ok((rows, first, last))
+    }
   }
 
   #[cfg(test)]

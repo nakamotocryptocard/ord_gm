@@ -12,6 +12,7 @@ mod server;
 pub mod subsidy;
 pub mod supply;
 pub mod traits;
+pub mod transfer;
 pub mod wallet;
 
 #[derive(Debug, Parser)]
@@ -40,6 +41,8 @@ pub(crate) enum Subcommand {
   Supply,
   #[command(about = "Display satoshi traits")]
   Traits(traits::Traits),
+  #[command(about = "Modify transfer log table")]
+  Transfer(transfer::Transfer),
   #[command(subcommand, about = "Wallet commands")]
   Wallet(wallet::Wallet),
 }
@@ -64,6 +67,7 @@ impl Subcommand {
       }
       Self::Supply => supply::run(),
       Self::Traits(traits) => traits.run(),
+      Self::Transfer(transfer) => transfer.run(options),
       Self::Wallet(wallet) => wallet.run(options),
     }
   }
