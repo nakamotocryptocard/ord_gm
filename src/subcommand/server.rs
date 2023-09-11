@@ -31,6 +31,7 @@ use {
     AcmeConfig,
   },
   std::{cmp::Ordering, str, sync::Arc},
+  tokio::time::sleep,
   tokio_stream::StreamExt,
   tower_http::{
     compression::CompressionLayer,
@@ -73,6 +74,40 @@ enum SpawnConfig {
 #[derive(Deserialize)]
 struct Search {
   query: String,
+}
+
+#[derive(Serialize)]
+struct MyInscriptionJson {
+  number: i64,
+  id: InscriptionId,
+  address: Option<String>,
+  output_value: Option<u64>,
+  sat: Option<SatoshiJson>,
+  content_length: Option<usize>,
+  content_type: String,
+  timestamp: u32,
+  genesis_height: u64,
+  genesis_fee: u64,
+  genesis_transaction: Txid,
+  location: String,
+  output: String,
+  offset: u64,
+}
+
+#[derive(Serialize)]
+struct SatoshiJson {
+  number: u64,
+  decimal: String,
+  degree: String,
+  percentile: String,
+  name: String,
+  cycle: u64,
+  epoch: u64,
+  period: u64,
+  block: u64,
+  offset: u64,
+  rarity: Rarity,
+  // timestamp: i64,
 }
 
 #[derive(RustEmbed)]
@@ -187,6 +222,14 @@ impl Server {
         )
         .route("/inscriptions/:from", get(Self::inscriptions_from))
         .route("/inscriptions/:from/:n", get(Self::inscriptions_from_n))
+        .route(
+          "/inscriptions_json/:start",
+          get(Self::inscriptions_json_start),
+        )
+        .route(
+          "/inscriptions_json/:start/:end",
+          get(Self::inscriptions_json_start_end),
+        )
         .route("/install.sh", get(Self::install_script))
         .route("/ordinal/:sat", get(Self::ordinal))
         .route("/output/:output", get(Self::output))
@@ -1120,6 +1163,150 @@ impl Server {
       .page(page_config, index.has_sat_index()?)
       .into_response()
     })
+  }
+
+  async fn inscriptions_json_start(
+    Extension(page_config): Extension<Arc<PageConfig>>,
+    Extension(index): Extension<Arc<Index>>,
+    Path(start): Path<i64>,
+  ) -> ServerResult<String> {
+    log::info!("GET /inscriptions_json/{start}");
+    Self::inscriptions_json(page_config, index, start, start + 1).await
+  }
+
+  async fn inscriptions_json_start_end(
+    Extension(page_config): Extension<Arc<PageConfig>>,
+    Extension(index): Extension<Arc<Index>>,
+    Path(path): Path<(i64, i64)>,
+  ) -> ServerResult<String> {
+    log::info!("GET /inscriptions_json/{}/{}", path.0, path.1);
+    Self::inscriptions_json(page_config, index, path.0, path.1).await
+  }
+
+  async fn inscriptions_json(
+    page_config: Arc<PageConfig>,
+    index: Arc<Index>,
+    start: i64,
+    end: i64,
+  ) -> ServerResult<String> {
+    const MAX_JSON_INSCRIPTIONS: i64 = 1000;
+
+    match start.cmp(&end) {
+      Ordering::Equal => Err(ServerError::BadRequest("range length == 0".to_string())),
+      Ordering::Greater => Err(ServerError::BadRequest("range length < 0".to_string())),
+      Ordering::Less => {
+        if end - start > MAX_JSON_INSCRIPTIONS {
+          return Err(ServerError::BadRequest(format!(
+            "range length > {MAX_JSON_INSCRIPTIONS}"
+          )));
+        }
+
+        let mut ret = Vec::new();
+
+        for i in start..end {
+          sleep(Duration::from_millis(0)).await;
+          match index.get_inscription_id_by_inscription_number(i) {
+            Err(_) => return Err(ServerError::BadRequest(format!("no inscription {i}"))),
+            Ok(inscription_id) => match inscription_id {
+              Some(inscription_id) => {
+                let entry = index
+                  .get_inscription_entry(inscription_id)?
+                  .ok_or_not_found(|| format!("inscription {inscription_id}"))?;
+
+                let tx = index.get_transaction(inscription_id.txid)?.unwrap();
+                let inscription = Inscription::from_transaction(&tx)
+                  .get(inscription_id.index as usize)
+                  .map(|transaction_inscription| transaction_inscription.inscription.clone())
+                  .unwrap();
+
+                let satpoint = index
+                  .get_inscription_satpoint_by_id(inscription_id)?
+                  .ok_or_not_found(|| format!("inscription {inscription_id}"))?;
+
+                let output = if satpoint.outpoint == unbound_outpoint() {
+                  None
+                } else {
+                  Some(
+                    if satpoint.outpoint.txid == inscription_id.txid {
+                      tx
+                    } else {
+                      index
+                        .get_transaction(satpoint.outpoint.txid)?
+                        .ok_or_not_found(|| {
+                          format!("inscription {inscription_id} current transaction")
+                        })?
+                    }
+                    .output
+                    .into_iter()
+                    .nth(satpoint.outpoint.vout.try_into().unwrap())
+                    .ok_or_not_found(|| {
+                      format!("inscription {inscription_id} current transaction output")
+                    })?,
+                  )
+                };
+
+                let mut address = None;
+                if let Some(output) = &output {
+                  if let Ok(a) = page_config.chain.address_from_script(&output.script_pubkey) {
+                    address = Some(a.to_string());
+                  }
+                }
+
+                let sat = entry.sat.map(|s| SatoshiJson {
+                  number: s.n(),
+                  decimal: s.decimal().to_string(),
+                  degree: s.degree().to_string(),
+                  percentile: s.percentile().to_string(),
+                  name: s.name(),
+                  cycle: s.cycle(),
+                  epoch: s.epoch().0,
+                  period: s.period(),
+                  block: s.height().0,
+                  offset: s.third(),
+                  rarity: s.rarity(),
+                  // timestamp: index.block_time(s.height())?.unix_timestamp(),
+                });
+
+                let content_type = inscription.content_type();
+                let unbound_suffix = if satpoint.outpoint == unbound_outpoint() {
+                  " (unbound)"
+                } else {
+                  ""
+                };
+
+                ret.push(MyInscriptionJson {
+                  number: entry.number,
+                  id: inscription_id,
+                  address,
+                  output_value: if output.is_some() {
+                    Some(output.unwrap().value)
+                  } else {
+                    None
+                  },
+                  sat,
+                  content_length: inscription.content_length(),
+                  content_type: if content_type.is_some() {
+                    content_type.unwrap().to_string()
+                  } else {
+                    "".to_string()
+                  },
+                  timestamp: entry.timestamp,
+                  genesis_height: entry.height,
+                  genesis_fee: entry.fee,
+                  genesis_transaction: inscription_id.txid,
+                  location: satpoint.to_string() + unbound_suffix,
+                  output: satpoint.outpoint.to_string() + unbound_suffix,
+                  offset: satpoint.offset,
+                });
+              }
+              None => return Err(ServerError::BadRequest(format!("no inscription {i}"))),
+            },
+          }
+        }
+
+        Ok(serde_json::to_string_pretty(&ret).ok().unwrap())
+      }
+    }
   }
 
   async fn redirect_http_to_https(
