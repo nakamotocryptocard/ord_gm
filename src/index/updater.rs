@@ -69,6 +69,7 @@ impl<'index> Updater<'_> {
       )?;
 
     let mut progress_bar = if cfg!(test)
+      || self.index.no_progress_bar
       || log_enabled!(log::Level::Info)
       || starting_height <= self.height
       || integration_test()
