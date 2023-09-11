@@ -83,6 +83,9 @@ impl<'index> Updater<'_> {
       Some(progress_bar)
     };
 
+    if starting_height > self.height
+      && (self.index.height_limit.is_none() || self.index.height_limit.unwrap() > self.height)
+    {
     let rx = Self::fetch_blocks_from(self.index, self.height, self.index_sats)?;
 
     let (mut outpoint_sender, mut value_receiver) = Self::spawn_fetcher(self.index)?;
@@ -153,6 +156,7 @@ impl<'index> Updater<'_> {
     if let Some(progress_bar) = &mut progress_bar {
       progress_bar.finish_and_clear();
     }
+  }
 
     Ok(())
   }
