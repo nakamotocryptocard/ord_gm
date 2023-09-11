@@ -1104,6 +1104,40 @@ impl Index {
     }
   }
 
+  pub(crate) fn get_stats(&self) -> Result<(Option<u64>, Option<i64>, Option<i64>)> {
+    let rtx = self.database.begin_read().unwrap();
+
+    let height = rtx
+      .open_table(HEIGHT_TO_BLOCK_HASH)?
+      .iter()?
+      .next_back()
+      .and_then(|result| result.ok())
+      .map(|(height, _hash)| height.value());
+
+    let table = rtx.open_table(INSCRIPTION_NUMBER_TO_INSCRIPTION_ID)?;
+    let mut iter = table.iter()?;
+
+    let lowest_number = iter
+      .next()
+      .and_then(|result| result.ok())
+      .map(|(number, _id)| number.value());
+
+    let highest_number = iter
+      .next_back()
+      .and_then(|result| result.ok())
+      .map(|(number, _id)| number.value());
+
+    Ok((
+      height,
+      lowest_number,
+      if highest_number.is_none() {
+        lowest_number
+      } else {
+        highest_number
+      },
+    ))
+  }
+
   #[cfg(test)]
   fn assert_inscription_location(
     &self,

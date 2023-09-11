@@ -110,6 +110,13 @@ struct SatoshiJson {
   // timestamp: i64,
 }
 
+#[derive(Serialize)]
+struct StatsJson {
+  highest_block_indexed: Option<u64>,
+  lowest_inscription_number: Option<i64>,
+  highest_inscription_number: Option<i64>,
+}
+
 #[derive(RustEmbed)]
 #[folder = "static"]
 struct StaticAssets;
@@ -240,6 +247,7 @@ impl Server {
         .route("/search", get(Self::search_by_query))
         .route("/search/:query", get(Self::search_by_path))
         .route("/static/*path", get(Self::static_asset))
+        .route("/stats", get(Self::stats))
         .route("/status", get(Self::status))
         .route("/transfers/:height", get(Self::inscriptionids_from_height))
         .route("/tx/:txid", get(Self::transaction))
@@ -694,6 +702,20 @@ impl Server {
         page_config.chain,
       )
       .page(page_config, index.has_sat_index()?),
+    )
+  }
+
+  async fn stats(Extension(index): Extension<Arc<Index>>) -> ServerResult<String> {
+    log::info!("GET /stats");
+    let stats = index.get_stats()?;
+    Ok(
+      serde_json::to_string_pretty(&StatsJson {
+        highest_block_indexed: stats.0,
+        lowest_inscription_number: stats.1,
+        highest_inscription_number: stats.2,
+      })
+      .ok()
+      .unwrap(),
     )
   }
 
