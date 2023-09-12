@@ -1106,6 +1106,22 @@ impl Index {
     }
   }
 
+  pub(crate) fn get_children(&self) -> Result<()> {
+    for range in self
+      .database
+      .begin_read()?
+      .open_multimap_table(INSCRIPTION_ID_TO_CHILDREN)?
+      .iter()?
+    {
+      let (parent, children) = range?;
+      for child in children {
+        println!("{} {}", <InscriptionId as Entry>::load(*parent.value()), <InscriptionId as Entry>::load(*child?.value()));
+      }
+    }
+
+    Ok(())
+  }
+
   pub(crate) fn get_stats(&self) -> Result<(Option<u64>, Option<i64>, Option<i64>)> {
     let rtx = self.database.begin_read().unwrap();
 

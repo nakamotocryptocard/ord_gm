@@ -1,5 +1,6 @@
 use super::*;
 
+pub mod children;
 pub mod decode;
 pub mod epochs;
 pub mod find;
@@ -17,6 +18,8 @@ pub mod wallet;
 
 #[derive(Debug, Parser)]
 pub(crate) enum Subcommand {
+  #[command(about = "List all the child inscriptions")]
+  Children(children::Children),
   #[command(about = "Decode a transaction")]
   Decode(decode::Decode),
   #[command(about = "List the first satoshis of each reward epoch")]
@@ -50,6 +53,7 @@ pub(crate) enum Subcommand {
 impl Subcommand {
   pub(crate) fn run(self, options: Options) -> SubcommandResult {
     match self {
+      Self::Children(children) => children.run(options),
       Self::Decode(decode) => decode.run(),
       Self::Epochs => epochs::run(),
       Self::Preview(preview) => preview.run(),
