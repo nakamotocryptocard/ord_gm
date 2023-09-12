@@ -1,6 +1,13 @@
 Changelog
 =========
 
+[0.9.0-gms3](https://github.com/ordinals/ord/releases/tag/0.9.0-gms3) - 2023-09-12
+----------------------------------------------------------------------------------
+
+### Added
+
+- Add subcommand `children` to list all the child/parent pairs
+
 [0.9.0-gms2](https://github.com/ordinals/ord/releases/tag/0.9.0-gms2) - 2023-09-11
 ----------------------------------------------------------------------------------
 
