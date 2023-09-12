@@ -80,6 +80,7 @@ struct Search {
 struct MyInscriptionJson {
   number: i64,
   id: InscriptionId,
+  parent: Option<InscriptionId>,
   address: Option<String>,
   output_value: Option<u64>,
   sat: Option<SatoshiJson>,
@@ -92,6 +93,7 @@ struct MyInscriptionJson {
   location: String,
   output: String,
   offset: u64,
+  children: Vec<InscriptionId>,
 }
 
 #[derive(Serialize)]
@@ -1368,6 +1370,7 @@ impl Server {
                 ret.push(MyInscriptionJson {
                   number: entry.number,
                   id: inscription_id,
+                  parent: entry.parent,
                   address,
                   output_value: if output.is_some() {
                     Some(output.unwrap().value)
@@ -1388,6 +1391,7 @@ impl Server {
                   location: satpoint.to_string() + unbound_suffix,
                   output: satpoint.outpoint.to_string() + unbound_suffix,
                   offset: satpoint.offset,
+                  children: index.get_children_by_inscription_id(inscription_id)?,
                 });
               }
               None => return Err(ServerError::BadRequest(format!("no inscription {i}"))),
