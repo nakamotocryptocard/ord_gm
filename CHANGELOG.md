@@ -1,6 +1,13 @@
 Changelog
 =========
 
+[0.9.0-gms2](https://github.com/ordinals/ord/releases/tag/0.9.0-gms2) - 2023-09-11
+----------------------------------------------------------------------------------
+
+### Added
+
+- Add `parent` and `children` to `/inscriptions_json/` endpoint
+
 [0.9.0-gms1](https://github.com/ordinals/ord/releases/tag/0.9.0-gms1) - 2023-09-11
 ----------------------------------------------------------------------------------
 
