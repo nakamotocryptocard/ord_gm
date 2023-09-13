@@ -30,7 +30,7 @@ use {
     caches::DirCache,
     AcmeConfig,
   },
-  std::{cmp::Ordering, str, sync::Arc},
+  std::{cmp::Ordering, collections::HashMap, str, sync::Arc},
   tokio::time::sleep,
   tokio_stream::StreamExt,
   tower_http::{
@@ -668,16 +668,23 @@ impl Server {
   ) -> ServerResult<String> {
     log::info!("GET /transfers/{height}");
     let mut ret = String::from("");
+    let mut tx_cache = HashMap::new();
     for inscription_id in index.get_inscription_ids_by_height(height)? {
+      sleep(Duration::from_millis(0)).await;
       let satpoint = index
         .get_inscription_satpoint_by_id(inscription_id)?
         .ok_or_not_found(|| format!("inscription {inscription_id}"))?;
       let address = if satpoint.outpoint == unbound_outpoint() {
         String::from("unbound")
       } else {
-        let output = index
-          .get_transaction(satpoint.outpoint.txid)?
-          .ok_or_not_found(|| format!("inscription {inscription_id} current transaction"))?
+        if !tx_cache.contains_key(&satpoint.outpoint.txid) {
+          tx_cache.insert(satpoint.outpoint.txid,
+                          index
+                          .get_transaction(satpoint.outpoint.txid)?
+                          .ok_or_not_found(|| format!("inscription {inscription_id} current transaction"))?);
+        }
+        
+        let output = tx_cache.get(&satpoint.outpoint.txid).unwrap().clone()
           .output
           .into_iter()
           .nth(satpoint.outpoint.vout.try_into().unwrap())
