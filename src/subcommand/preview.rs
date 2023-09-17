@@ -79,6 +79,7 @@ impl Preview {
         options: options.clone(),
         subcommand: Subcommand::Wallet(super::wallet::Wallet::Inscribe(
           super::wallet::inscribe::Inscribe {
+            utxo: Vec::new(),
             fee_rate: FeeRate::try_from(1.0).unwrap(),
             commit_fee_rate: None,
             file,
