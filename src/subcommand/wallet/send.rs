@@ -9,6 +9,11 @@ pub(crate) struct Send {
     help = "Consider spending outpoint <UTXO>, even if it is unconfirmed or contains inscriptions"
   )]
   utxo: Vec<OutPoint>,
+  #[clap(
+    long,
+    help = "Only spend outpoints given with --utxo when sending inscriptions or satpoints"
+  )]
+  pub(crate) coin_control: bool,
   #[arg(long, help = "Use fee rate of <FEE_RATE> sats/vB")]
   fee_rate: FeeRate,
   #[arg(
@@ -35,7 +40,11 @@ impl Send {
 
     let client = options.bitcoin_rpc_client_for_wallet_command(false)?;
 
-    let mut unspent_outputs = index.get_unspent_outputs(Wallet::load(&options)?)?;
+    let mut unspent_outputs = if self.coin_control {
+      BTreeMap::new()
+    } else {
+      index.get_unspent_outputs(Wallet::load(&options)?)?
+    };
 
     for outpoint in &self.utxo {
       unspent_outputs.insert(
@@ -61,8 +70,8 @@ impl Send {
         .get_inscription_satpoint_by_id(id)?
         .ok_or_else(|| anyhow!("Inscription {id} not found"))?,
       Outgoing::Amount(amount) => {
-        if !self.utxo.is_empty() {
-          bail!("--utxo doesn't work when sending cardinals");
+        if self.coin_control || !self.utxo.is_empty() {
+          bail!("--coin_control and --utxo don't work when sending cardinals");
         }
         Self::lock_inscriptions(&client, inscriptions, unspent_outputs)?;
         let txid = Self::send_amount(&client, amount, address, self.fee_rate.n())?;

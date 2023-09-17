@@ -43,6 +43,8 @@ pub(crate) struct Inscribe {
     help = "Consider spending outpoint <UTXO>, even if it is unconfirmed or contains inscriptions"
   )]
   pub(crate) utxo: Vec<OutPoint>,
+  #[arg(long, help = "Only spend outpoints given with --utxo")]
+  pub(crate) coin_control: bool,
   #[arg(long, help = "Use fee rate of <FEE_RATE> sats/vB.")]
   pub(crate) fee_rate: FeeRate,
   #[arg(
@@ -83,7 +85,11 @@ impl Inscribe {
 
     let client = options.bitcoin_rpc_client_for_wallet_command(false)?;
 
-    let mut utxos = index.get_unspent_outputs(Wallet::load(&options)?)?;
+    let mut utxos = if self.coin_control {
+      BTreeMap::new()
+    } else {
+      index.get_unspent_outputs(Wallet::load(&options)?)?
+    };
 
     for outpoint in &self.utxo {
       utxos.insert(
