@@ -38,6 +38,11 @@ struct ParentInfo {
 pub(crate) struct Inscribe {
   #[arg(long, help = "Inscribe <SATPOINT>.")]
   pub(crate) satpoint: Option<SatPoint>,
+  #[arg(
+    long,
+    help = "Consider spending outpoint <UTXO>, even if it is unconfirmed or contains inscriptions"
+  )]
+  pub(crate) utxo: Vec<OutPoint>,
   #[arg(long, help = "Use fee rate of <FEE_RATE> sats/vB.")]
   pub(crate) fee_rate: FeeRate,
   #[arg(
@@ -78,7 +83,16 @@ impl Inscribe {
 
     let client = options.bitcoin_rpc_client_for_wallet_command(false)?;
 
-    let utxos = index.get_unspent_outputs(Wallet::load(&options)?)?;
+    let mut utxos = index.get_unspent_outputs(Wallet::load(&options)?)?;
+
+    for outpoint in &self.utxo {
+      utxos.insert(
+        *outpoint,
+        Amount::from_sat(
+          client.get_raw_transaction(&outpoint.txid, None)?.output[outpoint.vout as usize].value,
+        ),
+      );
+    }
 
     let inscriptions = index.get_inscriptions(utxos.clone())?;
 
