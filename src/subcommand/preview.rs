@@ -80,6 +80,7 @@ impl Preview {
         subcommand: Subcommand::Wallet(super::wallet::Wallet::Inscribe(
           super::wallet::inscribe::Inscribe {
             utxo: Vec::new(),
+            coin_control: false,
             fee_rate: FeeRate::try_from(1.0).unwrap(),
             commit_fee_rate: None,
             file,
