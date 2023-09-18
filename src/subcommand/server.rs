@@ -19,7 +19,7 @@ use {
     headers::UserAgent,
     http::{header, HeaderMap, HeaderValue, StatusCode, Uri},
     response::{IntoResponse, Redirect, Response},
-    routing::get,
+    routing::{get, post},
     Router, TypedHeader,
   },
   axum_server::Handle,
@@ -244,6 +244,7 @@ impl Server {
         .route("/output/:output", get(Self::output))
         .route("/preview/:inscription_id", get(Self::preview))
         .route("/range/:start/:end", get(Self::range))
+        .route("/ranges", post(Self::ranges))
         .route("/rare.txt", get(Self::rare_txt))
         .route("/sat/:sat", get(Self::sat))
         .route("/search", get(Self::search_by_query))
@@ -585,6 +586,49 @@ impl Server {
       )),
       Ordering::Less => Ok(RangeHtml { start, end }.page(page_config, index.has_sat_index()?)),
     }
+  }
+
+  async fn ranges(
+    Extension(index): Extension<Arc<Index>>,
+    Json(data): Json<serde_json::Value>
+  ) -> ServerResult<Response> {
+    log::info!("POST /ranges");
+
+    if !index.has_sat_index()? {
+      return Err(ServerError::BadRequest("the /ranges endpoint needs the server to have a sat index".to_string()));
+    }
+
+    if !data.is_array() {
+      return Err(ServerError::BadRequest("expected array".to_string()));
+    }
+
+    let mut result = Vec::new();
+    let start_time = Instant::now();
+
+    for outpoint in data.as_array().unwrap() {
+      if start_time.elapsed() > Duration::from_secs(5) {
+        return Err(ServerError::BadRequest("request timed out".to_string()));
+      }
+
+      if !outpoint.is_string() {
+        return Err(ServerError::BadRequest("expected array of strings".to_string()));
+      }
+
+      match OutPoint::from_str(outpoint.as_str().unwrap()) {
+        Ok(outpoint) => {
+          sleep(Duration::from_millis(0)).await;
+          match index.ranges(outpoint) {
+            Ok(ranges) => result.extend(ranges),
+            _ => println!("no ranges for {}", outpoint),
+          }
+        }
+        _ => return Err(ServerError::BadRequest(format!("expected array of OutPoint strings ({} is bad)", outpoint))),
+      }
+    }
+
+    println!("  {} ranges from {} outputs in {:?}", result.len(), data.as_array().unwrap().len(), start_time.elapsed());
+
+    Ok(Json(result).into_response())
   }
 
   async fn rare_txt(Extension(index): Extension<Arc<Index>>) -> ServerResult<RareTxt> {

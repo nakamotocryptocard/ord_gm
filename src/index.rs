@@ -867,6 +867,20 @@ impl Index {
     }
   }
 
+  pub(crate) fn ranges(&self, outpoint: OutPoint) -> Result<Vec<(u64, u64)>> {
+    self.require_sat_index("list")?;
+
+    match self.list_inner(outpoint.store())? {
+      Some(sat_ranges) => 
+        Ok(sat_ranges
+           .chunks_exact(11)
+           .map(|chunk| SatRange::load(chunk.try_into().unwrap()))
+           .collect(),
+        ),
+      None => Err(anyhow!("no ranges")),
+    }
+  }
+
   pub(crate) fn block_time(&self, height: Height) -> Result<Blocktime> {
     let height = height.n();
 
