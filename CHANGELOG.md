@@ -1,6 +1,17 @@
 Changelog
 =========
 
+[0.9.0-gms4](https://github.com/ordinals/ord/releases/tag/0.9.0-gms4) - 2023-09-18
+----------------------------------------------------------------------------------
+
+### Added
+
+- Speed up `/transfers/` endpoint and don't block while running it.
+- Add `application/cbor` media type with extension `.cbor` (#2446)
+- Add --utxo flag to allow the use of unconfirmed outputs.
+- Add --coin-control flag to limit which outputs can be spent.
+- Add `/ranges` endpoint for looking up the sat ranges for a batch of outputs.
+
 [0.9.0-gms3](https://github.com/ordinals/ord/releases/tag/0.9.0-gms3) - 2023-09-12
 ----------------------------------------------------------------------------------
 
