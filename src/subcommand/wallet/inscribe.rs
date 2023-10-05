@@ -313,9 +313,9 @@ impl Inscribe {
       tx_out,
     }) = parent_info.clone()
     {
-      inputs.insert(0, location.outpoint);
+      inputs.insert(1, location.outpoint);
       outputs.insert(
-        0,
+        1,
         TxOut {
           script_pubkey: destination.script_pubkey(),
           value: tx_out.value,
@@ -323,7 +323,7 @@ impl Inscribe {
       );
     }
 
-    let commit_input = if parent_info.is_some() { 1 } else { 0 };
+    let commit_input = if parent_info.is_some() { 0 } else { 1 };
 
     let (_, reveal_fee) = Self::build_reveal_transaction(
       &control_block,
@@ -388,7 +388,7 @@ impl Inscribe {
     let mut prevouts = vec![unsigned_commit_tx.output[0].clone()];
 
     if let Some(parent_info) = parent_info {
-      prevouts.insert(0, parent_info.tx_out);
+      prevouts.insert(1, parent_info.tx_out);
     }
 
     let mut sighash_cache = SighashCache::new(&mut reveal_tx);
